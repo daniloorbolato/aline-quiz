@@ -219,6 +219,8 @@
     cursor: pointer;
     width: 100%;
     height: 100%;
+    font-size: 16px;
+    -webkit-appearance: none;
   }
 
   .pdf-upload-box .upload-icon { font-size: 32px; margin-bottom: 8px; }
@@ -828,12 +830,16 @@
     <!-- PDF upload -->
     <div class="pdf-input-area" id="pdf-section">
       <label>Selecionar PDF da aula</label>
-      <div class="pdf-upload-box" onclick="document.getElementById('pdf-file').click()">
-        <input type="file" id="pdf-file" accept=".pdf,.txt" onchange="handleFileSelect(event)">
+      <div class="pdf-upload-box" id="upload-box">
+        <input type="file" id="pdf-file" accept=".pdf,.txt,application/pdf,text/plain" onchange="handleFileSelect(event)">
         <div class="upload-icon">📤</div>
         <p>Toque para selecionar o PDF</p>
+        <p style="font-size:11px; color: var(--text-muted); margin-top:4px;">Funciona no Chrome, Firefox e Edge</p>
         <p class="file-name" id="file-name-display"></p>
       </div>
+      <button class="btn btn-secondary mt-12" onclick="document.getElementById('pdf-file').click()">
+        📂 Escolher arquivo
+      </button>
     </div>
 
     <!-- Topic input -->
@@ -961,18 +967,30 @@ function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
   selectedFile = file;
-  document.getElementById('file-name-display').textContent = '✅ ' + file.name;
+  const display = document.getElementById('file-name-display');
+  display.textContent = '✅ ' + file.name;
+  // Also update upload box visual
+  const box = document.getElementById('upload-box');
+  box.style.borderColor = 'var(--green)';
+  box.style.background = 'rgba(0,200,150,0.08)';
+  showToast('✅ Arquivo selecionado: ' + file.name);
 }
 
 async function readFileAsText(file) {
   return new Promise((resolve) => {
-    if (file.type === 'application/pdf') {
-      // For PDFs we'll send the name and ask Claude to generate based on topic
-      resolve(`[PDF: ${file.name}] - Conteúdo do curso de Psicomotricidade e Desenvolvimento Motor na Educação Infantil - Faculdade Líbano. Gere perguntas baseadas no tema: ${file.name.replace('.pdf', '').replace(/_/g, ' ')}`);
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      // For PDFs extract the name as topic context
+      const topicFromName = file.name
+        .replace('.pdf', '')
+        .replace(/_/g, ' ')
+        .replace(/-/g, ' ');
+      resolve(`Material de estudo: "${topicFromName}" - Curso de Psicomotricidade e Desenvolvimento Motor na Educação Infantil, Faculdade Líbano. Gere perguntas abrangentes sobre este tema acadêmico.`);
     } else {
+      // For .txt files read actual content
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target.result);
-      reader.readAsText(file);
+      reader.onload = (e) => resolve(e.target.result.substring(0, 8000));
+      reader.onerror = () => resolve(`Conteúdo do arquivo: ${file.name}`);
+      reader.readAsText(file, 'UTF-8');
     }
   });
 }
@@ -1052,7 +1070,7 @@ Responda SOMENTE com JSON válido, sem markdown, sem texto adicional:
 }`;
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://claude-api.daniloorbolato.workers.dev', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
